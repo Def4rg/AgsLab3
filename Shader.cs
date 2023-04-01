@@ -1,16 +1,7 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-
-using OpenTK.Graphics.OpenGL4;
+﻿using OpenTK.Graphics.OpenGL4;
 using OpenTK.Mathematics;
-using OpenTK.Windowing.Common;
-using OpenTK.Windowing.Desktop;
-using OpenTK.Windowing.GraphicsLibraryFramework;
 
-namespace GraphicApllication.Shaders
+namespace GraphicApllication
 {
     public class Shader
     {
@@ -31,19 +22,18 @@ namespace GraphicApllication.Shaders
         public void setUniform(string name, Vector2 value)
         {
             int uniformLocation = GL.GetUniformLocation(Handle, name);
-            GL.Uniform2(uniformLocation, value.X, value.Y);
+            GL.Uniform2(uniformLocation, ref value);
         }
         public void setUniform(string name, Vector4 value)
         {
             int uniformLocation = GL.GetUniformLocation(Handle, name);
-            GL.Uniform4(uniformLocation, value.W, value.X, value.Y, value.Z);
+            GL.Uniform4(uniformLocation, ref value);
         }
         public void setUniform(string name, Matrix4 value)
         {
             int uniformLocation = GL.GetUniformLocation(Handle, name);
-            GL.UniformMatrix4(uniformLocation, true, ref value);
+            GL.UniformMatrix4(uniformLocation, false, ref value);
         }
-
         private bool disposedValue = false;
 
         public Shader(string vertexPath, string fragmentPath)
