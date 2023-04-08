@@ -39,7 +39,7 @@ namespace GraphicApllication
         }
         public void Init()
         {
-            _shaders.Add(new Shader("Shaders/Example.vsh", "Shaders/Example.fsh"));
+            _shaders.Add(new Shader("data/Shaders/DiffuseTextureInstanced.vsh", "data/Shaders/DiffuseTextureInstanced.fsh"));
         }
         public void Start()
         {
@@ -61,7 +61,7 @@ namespace GraphicApllication
         }
         public void Finish()
         {
-            if(_graphicObjects.Count == 0)
+            if (_graphicObjects.Count == 0)
             {
                 return;
             }
@@ -112,7 +112,7 @@ namespace GraphicApllication
                     _shaders[0].setUniform("mShininess", _instance.GetMaterial(_graphicObjects[index].MaterialId).Shininess);
                 }
                 models.Add(_graphicObjects[index - 1].ModelMatrix);
-                if(models.Count == 200 || _graphicObjects[index - 1].MeshId != _graphicObjects[index].MeshId || _graphicObjects[index - 1].MaterialId != _graphicObjects[index].MaterialId || _graphicObjects[index - 1].TextureId != _graphicObjects[index].TextureId)
+                if (models.Count == 200 || _graphicObjects[index - 1].MeshId != _graphicObjects[index].MeshId || _graphicObjects[index - 1].MaterialId != _graphicObjects[index].MaterialId || _graphicObjects[index - 1].TextureId != _graphicObjects[index].TextureId)
                 {
                     for (int dentindex = 0; dentindex < models.Count(); dentindex++)
                     {
@@ -135,6 +135,7 @@ namespace GraphicApllication
             }
             _instance.GetMesh(_graphicObjects[_graphicObjects.Count() - 1].MeshId).DrawMany(models.Count());
             _drawcalls++;
+            //_shaders[0].Dispose();
         }
     }
 }

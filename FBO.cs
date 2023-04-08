@@ -1,9 +1,4 @@
-﻿using System;
-using System.Collections.Generic;
-using System.Linq;
-using System.Text;
-using System.Threading.Tasks;
-using OpenTK.Graphics.OpenGL4;
+﻿using OpenTK.Graphics.OpenGL4;
 
 namespace GraphicApllication
 {
@@ -15,35 +10,46 @@ namespace GraphicApllication
         private int _width;
         private int _height;
         private int _samples;
-        public void Init(int width, int height, bool multiSamples = false)
+        public int IndexFBO
         {
+            get => _fboIndex;
+        }
+        public int ColorTexture
+        {
+            get => _colorTexture;
+        }
+        public void Init(int width, int height, bool multiSamples)
+        {
+            _width = width;
+            _height = height;
             _fboIndex = GL.GenFramebuffer();
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, _fboIndex);
-            if (multiSamples)
+
+            _colorTexture = GL.GenTexture();
+            _depthTexture = GL.GenTexture();
+            if (!multiSamples)
             {
-                _colorTexture = GL.GenTexture();
-                GL.BindTexture(TextureTarget.Texture2DMultisample, _colorTexture);
-                GL.TexImage2DMultisample(TextureTargetMultisample.Texture2DMultisample, 8, PixelInternalFormat.Rgba8, 800, 600, false);
+                GL.BindTexture(TextureTarget.Texture2D, _colorTexture);
+                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgb8, _width, _height, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)null);
 
-                _depthTexture = GL.GenTexture();
-                GL.BindTexture(TextureTarget.Texture2DMultisample, _depthTexture);
-                GL.TexImage2DMultisample(TextureTargetMultisample.Texture2DMultisample, 8, PixelInternalFormat.DepthComponent24, 800, 600, false);
+                GL.BindTexture(TextureTarget.Texture2D, _depthTexture);
+                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.DepthComponent24, _width, _height, 0, PixelFormat.DepthComponent, PixelType.Float, (IntPtr)null);
 
-                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2DMultisample, _colorTexture, 0);
-                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2DMultisample, _colorTexture, 0);
+                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _colorTexture, 0);
+                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, _depthTexture, 0);
             }
             else
             {
-                _colorTexture = GL.GenTexture();
+                GL.GetInteger(GetPName.MaxColorTextureSamples, out _samples);
+
                 GL.BindTexture(TextureTarget.Texture2DMultisample, _colorTexture);
-                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.Rgba8, 800, 600, 0, PixelFormat.Rgba, PixelType.UnsignedByte, (IntPtr)0);
+                GL.TexImage2DMultisample(TextureTargetMultisample.Texture2DMultisample, _samples, PixelInternalFormat.Rgb8, _width, _height, true);
 
-                _depthTexture = GL.GenTexture();
                 GL.BindTexture(TextureTarget.Texture2DMultisample, _depthTexture);
-                GL.TexImage2D(TextureTarget.Texture2D, 0, PixelInternalFormat.DepthComponent24, 800, 600, 0, PixelFormat.DepthComponent, PixelType.Float, (IntPtr)0);
+                GL.TexImage2DMultisample(TextureTargetMultisample.Texture2DMultisample, _samples, PixelInternalFormat.DepthComponent24, _width, _height, true);
 
-                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2D, _colorTexture, 0);
-                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2D, _colorTexture, 0);
+                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.ColorAttachment0, TextureTarget.Texture2DMultisample, _colorTexture, 0);
+                GL.FramebufferTexture2D(FramebufferTarget.Framebuffer, FramebufferAttachment.DepthAttachment, TextureTarget.Texture2DMultisample, _depthTexture, 0);
             }
 
             FramebufferErrorCode status = GL.CheckFramebufferStatus(FramebufferTarget.Framebuffer);
@@ -51,24 +57,44 @@ namespace GraphicApllication
             {
                 Console.WriteLine("FBO creation failed");
             }
+            Console.WriteLine(status);
+            //GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
         }
         public void bind()
         {
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, _fboIndex);
-            GL.Viewport(0, 0, 800, 600);
+            GL.Viewport(0, 0, _width, _height);
         }
         public void unbind()
         {
             GL.BindFramebuffer(FramebufferTarget.Framebuffer, 0);
-            GL.Viewport(0, 0, 800, 600);
+            GL.Viewport(0, 0, _width, _height);
         }
-        void bindColorTexture(TextureUnit textureUnit = TextureUnit.Texture0)
+        public void bindColorTexture(TextureUnit textureUnit = TextureUnit.Texture0)
         {
-
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.ActiveTexture(textureUnit);
+            GL.BindTexture(TextureTarget.Texture2D, _colorTexture);
+            GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
         }
-        void bindDepthTexture(TextureUnit textureUnit = TextureUnit.Texture1)
+        public void bindDepthTexture(TextureUnit textureUnit = TextureUnit.Texture1)
         {
-
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMinFilter, (int)TextureMinFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureMagFilter, (int)TextureMagFilter.Nearest);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapS, (int)TextureWrapMode.ClampToEdge);
+            GL.TexParameter(TextureTarget.Texture2D, TextureParameterName.TextureWrapT, (int)TextureWrapMode.ClampToEdge);
+            GL.ActiveTexture(textureUnit);
+            GL.BindTexture(TextureTarget.Texture2D, _depthTexture);
+            GL.GenerateMipmap(GenerateMipmapTarget.Texture2D);
+        }
+        public void ResolveToFBO(FBO fbo)
+        {
+            GL.BindFramebuffer(FramebufferTarget.ReadFramebuffer, _fboIndex);
+            GL.BindFramebuffer(FramebufferTarget.DrawFramebuffer, fbo._fboIndex);
+            GL.BlitFramebuffer(0, 0, _width, _height, 0, 0, fbo._width, fbo._height, ClearBufferMask.ColorBufferBit /*| ClearBufferMask.DepthBufferBit*/, BlitFramebufferFilter.Nearest);
         }
     }
 }

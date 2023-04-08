@@ -4,12 +4,19 @@ using System.Diagnostics;
 
 namespace GraphicApllication
 {
+    struct delegateParams{
+        public int start;
+        public int end;
+        public List<GraphicObject> objects;
+    }
     internal class Scene
     {
+        private const int THREAD_COUNT = 2;
         private Camera _camera;
         private Light _light;
         private JObject _document;
-        private List<GraphicObject>[] _graphicsObjects = new List<GraphicObject>[2];
+        private List<GraphicObject> _graphicsObjects = new List<GraphicObject>();
+        private List<GraphicObject>[] _queue = new List<GraphicObject>[THREAD_COUNT];
         private int _renderedObjectsCount;
         private GraphicObject _createGraphicObject(string model)
         {
@@ -118,9 +125,9 @@ namespace GraphicApllication
         public void Init(string filepath)
         {
             _document = JObject.Parse(File.ReadAllText(filepath));
-            for(int index = 0; index < _graphicsObjects.Length; index++)
+            for(int i = 0; i < _queue.Length; i++)
             {
-                _graphicsObjects[index] = new List<GraphicObject>();
+                _queue[i] = new List<GraphicObject>();
             }
         }
         public void LoadFromJson(string filepath)
@@ -133,11 +140,31 @@ namespace GraphicApllication
                 graphicObject = _createGraphicObject(elem.GetValue("model").ToString());
                 graphicObject.AngleY = (float)elem.GetValue("angle");
                 graphicObject.Position = new Vector3((float)elem.GetValue("position")[0], (float)elem.GetValue("position")[1], (float)elem.GetValue("position")[2]);
-                _graphicsObjects[index].Add(graphicObject);
-                index++;
-                if (index >= _graphicsObjects.Length) index = 0;
+                _graphicsObjects.Add(graphicObject);
             }
-
+            _graphicsObjects.Sort((x, y) =>
+            {
+                if (x.TextureId > y.TextureId)
+                {
+                    return 1;
+                }
+                else if (x.TextureId < y.TextureId)
+                {
+                    return -1;
+                }
+                else
+                {
+                    if (x.MeshId > y.MeshId)
+                    {
+                        return 1;
+                    }
+                    else if (x.MeshId < y.MeshId)
+                    {
+                        return -1;
+                    }
+                }
+                return 0;
+            });
         }
         public Camera Camera
         {
@@ -149,48 +176,50 @@ namespace GraphicApllication
         }
         public void Draw()
         {
-            Stopwatch sw = new Stopwatch();
-            sw.Start();
             _renderedObjectsCount = 0;
-            var Threads = new Thread[2];
-            List<GraphicObject> queue1 = new List<GraphicObject>();
-            List<GraphicObject> queue2 = new List<GraphicObject>();
-            Thread task = new Thread(() =>
+            for (int i = 0; i < _queue.Length; i++)
             {
-                foreach (var elem in _graphicsObjects[0])
-                {
-                    if (!_lodTest(elem)) continue;
-                    if (!_frustrumCullingTest(elem)) continue;
-                    _renderedObjectsCount++;
-                    queue1.Add(elem);
-                }
-            });
-            Threads[0] = task;
-            task.Start();
-            Thread task1 = new Thread(() =>
-            {
-                foreach (var elem in _graphicsObjects[1])
-                {
-                    if (!_lodTest(elem)) continue;
-                    if (!_frustrumCullingTest(elem)) continue;
-                    _renderedObjectsCount++;
-                    queue2.Add(elem);
-                }
-            });
-            Threads[1] = task1;
-            task1.Start();
-
-            for (int index = 0; index < 2; index++)
-            {
-                Threads[index].Join();
+                _queue[i].Clear();
             }
-            sw.Stop();
-            //Console.WriteLine(sw.ElapsedMilliseconds);
-            RenderManager.Instance().Queue = queue1.Concat(queue2).ToList();
+            Thread[] threads = new Thread[_queue.Length];
+            for (int i = 0; i < threads.Length; i++)
+            {   
+                delegateParams parameters = new delegateParams();
+                parameters.start = _graphicsObjects.Count / threads.Length * i;
+                parameters.end = parameters.start + _graphicsObjects.Count / threads.Length;
+                parameters.objects = _queue[i];
+                threads[i] = new Thread(param =>_viewObjects((delegateParams)param));
+                threads[i].Start(parameters);
+            }
+            for(int i = 0; i < threads.Length; i++)
+            {
+                threads[i].Join();
+            }
+            int renderQueueLength = 0;
+            for (int i = 0; i < _queue.Length; i++)
+            {
+                renderQueueLength += _queue[i].Count;
+            }
+            var renderQueue = new List<GraphicObject>(renderQueueLength);
+            for (int i = 0; i < _queue.Length; i++)
+            {
+                renderQueue.AddRange(_queue[i]);
+            }
+            RenderManager.Instance().Queue = renderQueue;
         }
         public string GetSceneDescription()
         {
-            return $"{_renderedObjectsCount}/{_graphicsObjects[0].Count}";
+            return $"{_renderedObjectsCount}/{_graphicsObjects.Count}";
+        }
+        private void _viewObjects(delegateParams param)
+        {
+            for(int index = param.start; index < param.end; index++)
+            {
+                if (!_lodTest(_graphicsObjects[index])) continue;
+                if (!_frustrumCullingTest(_graphicsObjects[index])) continue;
+                _renderedObjectsCount++;
+                param.objects.Add(_graphicsObjects[index]);
+            }
         }
     }
 }

@@ -3,7 +3,6 @@ using OpenTK.Windowing.Common;
 using OpenTK.Windowing.Desktop;
 using OpenTK.Windowing.GraphicsLibraryFramework;
 using OpenTK.Mathematics;
-using Newtonsoft.Json.Linq;
 using System.Diagnostics;
 
 
@@ -11,8 +10,10 @@ namespace GraphicApllication
 { 
     public class Game : GameWindow
     {
+        private double time;
         private Camera _camera = new Camera(new Vector3(0.0f, 1.0f, 30.0f), 4.0f / 3.0f);
-        private Shader _shader;
+        private List<Shader> _shader = new List<Shader>();
+        private int index = 0;
         private List<GraphicObject> _graphicObjects = new ();
         private Light _light = new Light();
         Scene scene = new Scene();
@@ -21,6 +22,9 @@ namespace GraphicApllication
         private bool _firstMove = true;
 
         private Mesh mesh = new Mesh();
+
+        private FBO _filter0 = new FBO();
+        private FBO _filter1 = new FBO();
         public Game(int width, int height, string title) :
             base(GameWindowSettings.Default, new NativeWindowSettings()
             {
@@ -31,11 +35,15 @@ namespace GraphicApllication
         protected override void OnLoad()
         {
             base.OnLoad();
-            GL.ClearColor(1.0f, 1.0f, 1.0f, 1.0f);
+            GL.ClearColor(0.4f, 0.4f, 0.4f, 0.4f);
             GL.Enable(EnableCap.CullFace);
             GL.Enable(EnableCap.DepthTest);
             GL.Enable(EnableCap.TextureColorTableSgi);
             GL.Enable(EnableCap.DepthClamp);
+            _filter0.Init(800, 600, true);
+            _filter0.unbind();
+            _filter1.Init(800, 600, false);
+            _filter1.unbind();
             _light.Ambient = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
             _light.Diffuse = new Vector4(1.0f, 1.0f, 1.0f, 1.0f);
             _light.Specular = new Vector4(0.0f, 0.0f, 0.0f, 1.0f);
@@ -46,25 +54,37 @@ namespace GraphicApllication
             scene.LoadFromJson("data/scenes/big_scene.json");
             scene.Camera = _camera;
             scene.Light = _light;
+
+            _shader.Add(new Shader("data/Shaders/SimplePostProcessing.vsh", "data/Shaders/SimplePostProcessing.fsh"));
+            _shader.Add(new Shader("data/Shaders/GreyPostProcessing.vsh", "data/Shaders/GreyPostProcessing.fsh"));
+            _shader.Add(new Shader("data/Shaders/SepiaPostProcessing.vsh", "data/Shaders/SepiaPostProcessing.fsh"));
         }
         protected override void OnRenderFrame(FrameEventArgs args)
         {
             base.OnRenderFrame(args);
             GL.PolygonMode(MaterialFace.FrontAndBack, PolygonMode.Fill);
             GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
-            Stopwatch stopwatch = new Stopwatch();
+            _filter0.bind();
+
+            GL.Clear(ClearBufferMask.ColorBufferBit | ClearBufferMask.DepthBufferBit);
+
             RenderManager.Instance().Start();
-            //Console.Clear();
-            stopwatch.Start();
             scene.Draw();
-            stopwatch.Stop();
-            Console.WriteLine($"SCENE_DRAW:{stopwatch.ElapsedMilliseconds}");
-            stopwatch.Start();
             RenderManager.Instance().Finish();
-            stopwatch.Stop();
-            Console.WriteLine($"REN_FINISH:{stopwatch.ElapsedMilliseconds}");
+            _filter0.ResolveToFBO(_filter1);
+            _filter0.unbind();
+
+            _filter1.bindColorTexture();
+            _shader[index].Use();
+            _shader[index].setUniform("texture_0", 0);
+            DrawBox();
+            time += args.Time;
+            if(time > 0.3f)
+            {
+                base.Title = $"Lab1 [FPS:{Convert.ToInt64(1 / args.Time)}][{scene.GetSceneDescription()}][{RenderManager.Instance().Texturecalls}][{RenderManager.Instance().Drawcalls}]";
+                time = 0;
+            }
             SwapBuffers();
-            base.Title = $"Lab1 [FPS:{Convert.ToInt64(1 / args.Time)}][{scene.GetSceneDescription()}][{RenderManager.Instance().Texturecalls}][{RenderManager.Instance().Drawcalls}]";
         }
         protected override void OnUpdateFrame(FrameEventArgs args)
         {
@@ -99,6 +119,14 @@ namespace GraphicApllication
             if (input.IsKeyDown(Keys.LeftControl))
             {
                 _camera.Position -= _camera.Up * cameraSpeed * (float)args.Time;
+            }
+            if (input.IsKeyPressed(Keys.KeyPad1))
+            {
+                index++;
+                if(index >= _shader.Count)
+                {
+                    index = 0;
+                }
             }
 
             if (mouse.IsButtonDown(MouseButton.Left))
@@ -138,11 +166,47 @@ namespace GraphicApllication
             GL.BindVertexArray(0);
             GL.UseProgram(0);
 
-            GL.DeleteProgram(_shader.Handle);
+            //GL.DeleteProgram(_shader.Handle);
             
-            _shader.Dispose();
+            //_shader.Dispose();
 
             base.OnUnload();
+        }
+        private void DrawBox()
+        {
+            int VAO_Index = 0;
+            int VBO_Index = 0;
+            int VertexCount = 0;
+            bool Init = true;
+            if (Init)
+            {
+                Init = false;
+                VBO_Index = GL.GenBuffer();
+                GL.BindBuffer(BufferTarget.ArrayBuffer, VBO_Index);
+                float[] Verteces = {
+                    -0.5f, +0.5f,
+                    -0.5f, -0.5f,
+                    +0.5f, +0.5f,
+                    +0.5f, +0.5f,
+                    -0.5f, -0.5f,
+                    +0.5f, -0.5f
+                };
+                GL.BufferData(BufferTarget.ArrayBuffer, Verteces.Length * sizeof(float), Verteces, BufferUsageHint.StaticDraw);
+
+                VAO_Index = GL.GenVertexArray();
+                GL.BindVertexArray(VAO_Index);
+
+                GL.BindBuffer(BufferTarget.ArrayBuffer, VBO_Index);
+                int location = 0;
+                GL.VertexAttribPointer(location, 2, VertexAttribPointerType.Float, false, 0, 0);
+                GL.EnableVertexAttribArray(location);
+
+                GL.BindVertexArray(0);
+
+                VertexCount = 6;
+            }
+            GL.BindVertexArray(VAO_Index);
+            GL.DrawArrays(PrimitiveType.Triangles, 0, VertexCount);
         }
     }
 }
