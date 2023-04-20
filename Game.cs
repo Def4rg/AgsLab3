@@ -96,7 +96,7 @@ namespace GraphicApllication
 
             KeyboardState input = KeyboardState;
             MouseState mouse = MouseState;
-            if (input.IsKeyDown(Keys.W))
+            if (input.IsKeyDown(Keys.W)) //
             {
                 _camera.Position += _camera.Front * cameraSpeed * (float)args.Time;
             }
